@@ -28,10 +28,10 @@ echo [2/4] Instalando dependencias necessarias (PyWebView, Requests, PsUtil, PyI
 
 echo.
 echo [3/4] Compilando BetrayClient.exe (Interface Grafica Dark Standalone 100%% Independente)...
-%PYTHON_CMD% -m PyInstaller --noconsole --onefile --clean --name="BetrayClient" main.py
+%PYTHON_CMD% -m PyInstaller --noconsole --onefile --clean --name="BetrayClient" --add-data="web;web" --add-data="config;config" main.py
 if %errorlevel% neq 0 (
     echo Tentando fallback do modulo pyinstaller...
-    %PYTHON_CMD% -m pyinstaller --noconsole --onefile --clean --name="BetrayClient" main.py
+    %PYTHON_CMD% -m pyinstaller --noconsole --onefile --clean --name="BetrayClient" --add-data="web;web" --add-data="config;config" main.py
 )
 
 echo.

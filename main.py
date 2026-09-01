@@ -20,172 +20,14 @@ try:
 except ImportError:
     HAS_WEBVIEW = False
 
-# Importação dos módulos locais da LCU
-try:
-    from src.api.lcu_client import LCUClient
-    from src.core.auto_accept import AutoAcceptHandler
-    from src.core.auto_pick import AutoPickHandler
-    from src.core.auto_ban import AutoBanHandler
-    from src.core.background_changer import BackgroundChanger
-    from src.core.rose_skin_changer import RoseSkinChanger
-    from src.core.lobby_reveal import LobbyRevealer
-    from src.core.dodge_handler import DodgeHandler
-except ImportError:
-    # Fallback caso os arquivos estejam em outra estrutura de diretório
-    import re
-    import base64
-    import requests
-    import urllib3
-    import psutil
-    import subprocess
-
-    urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-
-    class LCUClient:
-        def __init__(self):
-            self.port = None
-            self.auth_token = None
-            self.protocol = 'https'
-            self.session = requests.Session()
-            self.session.verify = False
-            self.connected = False
-
-        def find_lockfile(self):
-            for proc in psutil.process_iter(['name', 'cmdline']):
-                try:
-                    name = proc.info['name'] or ''
-                    if 'LeagueClientUx' in name:
-                        cmdline = ' '.join(proc.info['cmdline'] or [])
-                        port_match = re.search(r'--app-port=([0-9]+)', cmdline)
-                        token_match = re.search(r'--remoting-auth-token=([\w-]+)', cmdline)
-                        if port_match and token_match:
-                            self.port = port_match.group(1)
-                            self.auth_token = token_match.group(1)
-                            auth_str = f"riot:{self.auth_token}"
-                            encoded_auth = base64.b64encode(auth_str.encode('utf-8')).decode('utf-8')
-                            self.session.headers.update({
-                                'Authorization': f'Basic {encoded_auth}',
-                                'Accept': 'application/json',
-                                'Content-Type': 'application/json'
-                            })
-                            self.connected = True
-                            return True
-                except Exception:
-                    continue
-            return False
-
-        def connect(self):
-            return self.find_lockfile()
-
-        def get(self, endpoint):
-            if not self.connected and not self.connect():
-                return None
-            url = f"{self.protocol}://127.0.0.1:{self.port}{endpoint}"
-            try:
-                return self.session.get(url, timeout=3)
-            except Exception:
-                return None
-
-        def post(self, endpoint, data=None):
-            if not self.connected and not self.connect():
-                return None
-            url = f"{self.protocol}://127.0.0.1:{self.port}{endpoint}"
-            try:
-                return self.session.post(url, json=data, timeout=3)
-            except Exception:
-                return None
-
-        def patch(self, endpoint, data=None):
-            if not self.connected and not self.connect():
-                return None
-            url = f"{self.protocol}://127.0.0.1:{self.port}{endpoint}"
-            try:
-                return self.session.patch(url, json=data, timeout=3)
-            except Exception:
-                return None
-
-        def delete(self, endpoint):
-            if not self.connected and not self.connect():
-                return None
-            url = f"{self.protocol}://127.0.0.1:{self.port}{endpoint}"
-            try:
-                return self.session.delete(url, timeout=3)
-            except Exception:
-                return None
-
-        def get_gameflow_phase(self):
-            res = self.get('/lol-gameflow/v1/gameflow-phase')
-            if res and res.status_code == 200:
-                return res.text.replace('"', '').strip()
-            return "None"
-
-    class AutoAcceptHandler:
-        def __init__(self, lcu, settings):
-            self.lcu = lcu
-            self.settings = settings
-        def check_and_accept(self):
-            if not self.settings.get("auto_accept", True):
-                return False
-            phase = self.lcu.get_gameflow_phase()
-            if phase == "ReadyCheck":
-                delay = self.settings.get("auto_accept_delay", 1)
-                time.sleep(delay)
-                res = self.lcu.post("/lol-matchmaking/v1/ready-check/accept")
-                return res and res.status_code == 200
-            return False
-
-    class AutoPickHandler:
-        def __init__(self, lcu, settings):
-            self.lcu = lcu
-            self.settings = settings
-        def check_and_act(self, session_data):
-            pass
-
-    class AutoBanHandler:
-        def __init__(self, lcu, settings):
-            self.lcu = lcu
-            self.settings = settings
-        def check_and_act(self, session_data):
-            pass
-
-    class BackgroundChanger:
-        def __init__(self, lcu):
-            self.lcu = lcu
-        def set_background(self, skin_id):
-            payload = {"key": "backgroundSkinId", "value": int(skin_id)}
-            res = self.lcu.post("/lol-summoner/v1/current-summoner/background-skin", payload)
-            return res and res.status_code in [200, 204]
-
-    class RoseSkinChanger:
-        def __init__(self, lcu, settings):
-            self.lcu = lcu
-            self.settings = settings
-            self.active_skins = {}
-        def set_skin(self, champ_id, skin_id, chroma_id=None):
-            self.active_skins[int(champ_id)] = {"skin_id": int(skin_id), "chroma_id": chroma_id}
-            return True
-        def check_and_apply_in_game(self):
-            pass
-
-    class LobbyRevealer:
-        def __init__(self, lcu):
-            self.lcu = lcu
-        def reveal_current_lobby(self):
-            return {"success": True, "participants": []}
-
-    class DodgeHandler:
-        def __init__(self, lcu):
-            self.lcu = lcu
-            self.is_armed = False
-            self.last_second_seconds = 3
-        def arm_last_second(self, s=3):
-            self.last_second_seconds = s
-            self.is_armed = True
-        def cancel_last_second(self):
-            self.is_armed = False
-        def dodge(self, method="auto"):
-            res = self.lcu.post("/riotclient/kill-and-restart-ux")
-            return {"success": bool(res and res.status_code in [200, 204]), "message": "Dodge executado."}
+from src.api.lcu_client import LCUClient
+from src.core.auto_accept import AutoAcceptHandler
+from src.core.auto_pick import AutoPickHandler
+from src.core.auto_ban import AutoBanHandler
+from src.core.background_changer import BackgroundChanger
+from src.core.rose_skin_changer import RoseSkinChanger
+from src.core.lobby_reveal import LobbyRevealer
+from src.core.dodge_handler import DodgeHandler
 
 def get_resource_path(relative_path):
     if hasattr(sys, '_MEIPASS'):
@@ -278,19 +120,32 @@ class BetrayBridgeAPI:
         summoner_data['tagLine'] = tag_line
         summoner_data['formattedRiotId'] = f"{game_name}#{tag_line}"
         
+        if not summoner_data.get('summonerLevel') and chat_data.get('lol', {}).get('level'):
+            try:
+                summoner_data['summonerLevel'] = int(chat_data['lol']['level'])
+            except:
+                summoner_data['summonerLevel'] = 1
+
+        if not summoner_data.get('profileIconId') and chat_data.get('icon'):
+            summoner_data['profileIconId'] = chat_data['icon']
+
         ranked_res = self.lcu.get("/lol-ranked/v1/current-ranked-stats")
         ranked_data = ranked_res.json() if ranked_res and ranked_res.status_code == 200 else {}
         
         bg_res = self.lcu.get("/lol-summoner/v1/current-summoner/background-skin")
         bg_data = bg_res.json() if bg_res and bg_res.status_code == 200 else {}
 
-        self.add_log("success", f"Perfil identificado: {game_name}#{tag_line}")
+        masteries_res = self.lcu.get("/lol-champion-mastery/v1/local-player/champion-mastery")
+        masteries_data = masteries_res.json() if masteries_res and masteries_res.status_code == 200 else []
+
+        self.add_log("success", f"Perfil identificado: {game_name}#{tag_line} (Nível {summoner_data.get('summonerLevel', 1)})")
 
         return {
             "success": True,
             "summoner": summoner_data,
             "ranked": ranked_data,
-            "background": bg_data
+            "background": bg_data,
+            "masteries": masteries_data
         }
 
     def set_rose_skin(self, champ_id, skin_id, chroma_id=None):
@@ -306,7 +161,9 @@ class BetrayBridgeAPI:
             self.settings["selected_background_skin_id"] = int(skin_id)
             self.save_settings(self.settings)
             return True
-        return False
+        else:
+            self.add_log("error", f"Falha ao trocar skin para ID {skin_id}.")
+            return False
 
     def accept_match_now(self):
         res = self.lcu.post("/lol-matchmaking/v1/ready-check/accept")
@@ -318,11 +175,28 @@ class BetrayBridgeAPI:
     def dodge_champ_select(self, method="auto"):
         res = self.dodge_handler.dodge(method=method)
         if res.get("success"):
-            self.add_log("success", f"🚪 [DODGE SUCESSO] {res.get('message', 'Dodge executado!')}")
+            self.add_log("success", f"🚪 [DODGE SUCESSO] {res.get('message', 'Dodge executado com sucesso!')}")
+        else:
+            self.add_log("error", f"Falha ao executar dodge via método {method}.")
         return res
 
+    def arm_last_second_dodge(self, seconds=3):
+        self.dodge_handler.arm_last_second(seconds)
+        self.add_log("info", f"⏱️ [AUTO-DODGE ARMADO] Dodge configurado para os últimos {seconds}s de seleção.")
+        return {"success": True, "armed": True, "seconds": seconds}
+
+    def cancel_last_second_dodge(self):
+        self.dodge_handler.cancel_last_second()
+        self.add_log("info", "⏱️ [AUTO-DODGE CANCELADO] Temporizador desativado.")
+        return {"success": True, "armed": False}
+
     def reveal_lobby(self):
-        return self.lobby_revealer.reveal_current_lobby()
+        res = self.lobby_revealer.reveal_current_lobby()
+        if res.get("success"):
+            self.add_log("success", f"🔍 [LOBBY REVEAL] {len(res.get('participants', []))} participantes identificados no Champ Select!")
+        else:
+            self.add_log("info", "Aguardando início do Champ Select para revelar jogadores.")
+        return res
 
 def background_lcu_worker(api):
     last_phase = "None"
@@ -338,6 +212,7 @@ def background_lcu_worker(api):
                 if phase == "ReadyCheck":
                     if api.settings.get("auto_accept", True):
                         delay = api.settings.get("auto_accept_delay", 1)
+                        api.add_log("info", f"Partida encontrada! Auto-Aceitando em {delay}s...")
                         time.sleep(delay)
                         api.accept_match_now()
                         time.sleep(3)
@@ -349,8 +224,19 @@ def background_lcu_worker(api):
                         api.auto_ban_handler.check_and_act(session_data)
                         api.auto_pick_handler.check_and_act(session_data)
 
+                        if api.dodge_handler.is_armed:
+                            timer = session_data.get("timer", {})
+                            adjusted_time_left = timer.get("adjustedTimeLeftInPhase", 0) / 1000.0
+                            if 0 < adjusted_time_left <= api.dodge_handler.last_second_seconds:
+                                api.add_log("warning", f"⏱️ [LAST-SECOND DODGE] Apenas {adjusted_time_left:.1f}s restantes na fase. Executando Dodge agora!")
+                                api.dodge_champ_select(method=api.settings.get("dodge_method", "auto"))
+                                api.dodge_handler.cancel_last_second()
+
+                elif phase == "InProgress":
+                    api.rose_changer.check_and_apply_in_game()
+
             time.sleep(1)
-        except Exception:
+        except Exception as e:
             time.sleep(2)
 
 def start_local_http_server(directory, port=18899):
@@ -386,11 +272,8 @@ def main():
     worker_thread.start()
 
     port = 18899
-    if os.path.exists(WEB_DIR):
-        start_local_http_server(WEB_DIR, port=port)
-        url = f"http://127.0.0.1:{port}/index.html"
-    else:
-        url = "https://ais-dev-c5y3jqli5vtzte2hjfusn4-424336988653.us-east5.run.app"
+    start_local_http_server(WEB_DIR, port=port)
+    url = f"http://127.0.0.1:{port}/index.html"
 
     if HAS_WEBVIEW:
         window = webview.create_window(

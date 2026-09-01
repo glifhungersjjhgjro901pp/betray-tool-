@@ -27,6 +27,8 @@ def build():
         "--onefile",
         "--clean",
         "--name=BetrayClient",
+        "--add-data=web;web" if os.name == 'nt' else "--add-data=web:web",
+        "--add-data=config;config" if os.name == 'nt' else "--add-data=config:config",
         "main.py"
     ]
     subprocess.check_call(cmd)
