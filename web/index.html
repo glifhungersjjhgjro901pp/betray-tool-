@@ -1052,7 +1052,19 @@
     function armRoseSkinInGame() {
       const skinId = selectedRoseSkin.id || (selectedRoseChamp.id * 1000);
       const skinName = selectedRoseSkin.name || selectedRoseChamp.name;
-      appendTerminalLog('info', '[ROSE ENGINE] Skin "' + skinName + '" armada para ' + selectedRoseChamp.name + '!');
+      appendTerminalLog('success', '🌸 [ROSE ENGINE] Skin "' + skinName + '" armada para ' + selectedRoseChamp.name + ' (SkinID: ' + skinId + ')!');
+      
+      if (!currentSettings.rose_selected_skins) currentSettings.rose_selected_skins = {};
+      currentSettings.rose_selected_skins[String(selectedRoseChamp.id)] = {
+        skinId: skinId,
+        skinNum: selectedRoseSkin.num || 0,
+        skinName: skinName,
+        chromaId: selectedRoseChromaIndex
+      };
+      currentSettings.rose_current_skin_id = skinId;
+      currentSettings.rose_current_chroma_id = selectedRoseChromaIndex;
+      syncSettings();
+
       if (window.pywebview && window.pywebview.api && window.pywebview.api.set_rose_skin) {
         window.pywebview.api.set_rose_skin(selectedRoseChamp.id, skinId, selectedRoseChromaIndex);
       }

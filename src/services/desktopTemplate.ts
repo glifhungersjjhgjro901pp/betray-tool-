@@ -45,13 +45,16 @@ export function getDesktopHtml(champions: Champion[]): string {
       
       <!-- Brand Logo Tile -->
       <div class="flex items-center gap-3">
-        <div class="flex items-center justify-center gap-2.5 px-3.5 py-1.5 rounded-lg bg-black border border-rose-950/80 shadow-[0_0_15px_rgba(0,0,0,0.8)]">
-          <div class="w-6 h-6 border border-rose-600/50 rounded flex items-center justify-center bg-[#130810] shadow-[0_0_8px_rgba(225,29,72,0.4)]">
-            <div class="w-2.5 h-2.5 bg-rose-500 rounded-sm"></div>
+        <div class="flex items-center justify-center gap-2.5 px-3 py-1.5 rounded-xl bg-black border border-rose-900/70 shadow-[0_0_15px_rgba(0,0,0,0.8)]">
+          <div class="w-8 h-8 rounded-lg overflow-hidden border border-rose-500/70 flex items-center justify-center bg-[#0d0710] shadow-[0_0_10px_rgba(225,29,72,0.4)] shrink-0">
+            <span class="text-base select-none">🗡️</span>
           </div>
-          <h1 class="font-cinzel text-sm sm:text-base font-bold tracking-widest text-[#f8fafc] whitespace-nowrap">
-            BETRAY <span class="text-rose-500">CLIENT</span>
-          </h1>
+          <div class="flex flex-col">
+            <h1 class="font-cinzel text-sm sm:text-base font-black tracking-widest text-[#f8fafc] whitespace-nowrap leading-none">
+              BETRAY <span class="text-rose-500">CLIENT</span>
+            </h1>
+            <span class="text-[8px] font-mono text-slate-400 tracking-wider uppercase">Talon Dark Edition</span>
+          </div>
         </div>
       </div>
 
@@ -98,7 +101,9 @@ export function getDesktopHtml(champions: Champion[]): string {
   </header>
 
   <!-- MAIN CONTAINER -->
-  <main class="max-w-7xl mx-auto px-4 py-6 flex-1 w-full">
+  <main class="max-w-7xl mx-auto px-4 py-6 flex-1 w-full relative">
+    <!-- Floating Skin & Action Notifications Toast Container -->
+    <div id="rose-toast-container" class="fixed top-20 right-6 z-50 flex flex-col gap-2.5 max-w-md pointer-events-none"></div>
 
     <!-- TAB 1: AUTO-ACCEPT -->
     <section id="tab-queue" class="tab-content space-y-5">
@@ -1054,12 +1059,51 @@ export function getDesktopHtml(champions: Champion[]): string {
       }
     }
 
+    function showSkinConfirmationNotification(champName, skinName, skinId, chromaName) {
+      const container = document.getElementById('rose-toast-container');
+      if (!container) return;
+      const toast = document.createElement('div');
+      toast.className = 'pointer-events-auto p-4 rounded-xl bg-[#0b0f19]/95 border-2 border-rose-500 shadow-[0_0_25px_rgba(225,29,72,0.4)] text-white flex items-center gap-3.5 transition-all duration-300 transform translate-y-0';
+      toast.innerHTML = 
+        '<div class="w-10 h-10 rounded-lg bg-rose-950 border border-rose-500 flex items-center justify-center shrink-0 text-xl">🌸</div>' +
+        '<div class="flex-1 min-w-0">' +
+          '<div class="flex items-center gap-1.5">' +
+            '<span class="text-[10px] font-bold text-rose-400 uppercase tracking-wider">Skin Armada com Sucesso!</span>' +
+            '<span class="text-[9px] font-mono bg-emerald-950 text-emerald-300 px-1.5 py-0.2 rounded border border-emerald-600/40">LCU Pronta</span>' +
+          '</div>' +
+          '<div class="text-xs font-bold text-slate-100 font-cinzel truncate">' + skinName + '</div>' +
+          '<div class="text-[10px] text-slate-400 font-mono">' + champName + ' • ID: ' + skinId + (chromaName ? ' • ' + chromaName : '') + '</div>' +
+        '</div>' +
+        '<button onclick="this.parentElement.remove()" class="text-slate-400 hover:text-white text-xs px-1">✕</button>';
+      container.appendChild(toast);
+      setTimeout(function() {
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateY(-10px)';
+        setTimeout(function() { toast.remove(); }, 300);
+      }, 4500);
+    }
+
     function armRoseSkinInGame() {
       const skinId = selectedRoseSkin.id || (selectedRoseChamp.id * 1000);
       const skinName = selectedRoseSkin.name || selectedRoseChamp.name;
-      appendTerminalLog('info', '[ROSE ENGINE] Skin "' + skinName + '" armada para ' + selectedRoseChamp.name + '!');
+      const chromaLabel = selectedRoseChromaIndex !== null && CHROMA_COLORS[selectedRoseChromaIndex] ? 'Chroma ' + CHROMA_COLORS[selectedRoseChromaIndex].name : '';
+      
+      appendTerminalLog('success', '🌸 [ROSE ENGINE] Skin "' + skinName + '" armada para ' + selectedRoseChamp.name + ' (SkinID: ' + skinId + ')!');
+      showSkinConfirmationNotification(selectedRoseChamp.name, skinName, skinId, chromaLabel);
+      
+      if (!currentSettings.rose_selected_skins) currentSettings.rose_selected_skins = {};
+      currentSettings.rose_selected_skins[String(selectedRoseChamp.id)] = {
+        skinId: skinId,
+        skinNum: selectedRoseSkin.num || 0,
+        skinName: skinName,
+        chromaId: selectedRoseChromaIndex
+      };
+      currentSettings.rose_current_skin_id = skinId;
+      currentSettings.rose_current_chroma_id = selectedRoseChromaIndex;
+      syncSettings();
+
       if (window.pywebview && window.pywebview.api && window.pywebview.api.set_rose_skin) {
-        window.pywebview.api.set_rose_skin(selectedRoseChamp.id, skinId, selectedRoseChromaIndex);
+        window.pywebview.api.set_rose_skin(selectedRoseChamp.id, skinId, selectedRoseChromaIndex, skinName);
       }
     }
 

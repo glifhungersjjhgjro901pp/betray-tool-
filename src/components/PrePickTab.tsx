@@ -371,6 +371,32 @@ export const PrePickTab: React.FC<PrePickTabProps> = ({
               )}
             </div>
 
+            {/* Auto-Lock Toggle Card */}
+            <div className="p-3 rounded bg-[#010a13] border border-[#c89b3c]/30 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5">
+                <div className={`p-2 rounded ${settings.autoLockPick ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' : 'bg-stone-800 text-stone-500'}`}>
+                  <Sparkles className="w-4 h-4" />
+                </div>
+                <div>
+                  <div className="text-xs font-bold text-[#f0e6d2]">Confirmar Pick Automaticamente (Lock-In)</div>
+                  <div className="text-[10px] text-[#a09b8c]">Trava/Confirma o campeão instantaneamente na sua vez de pick.</div>
+                </div>
+              </div>
+              <button
+                id="auto-lock-pick-toggle"
+                onClick={() => updateSettings({ autoLockPick: !settings.autoLockPick })}
+                className={`relative inline-flex h-5 w-10 shrink-0 items-center rounded-full transition-colors cursor-pointer ${
+                  settings.autoLockPick ? 'bg-[#c89b3c]' : 'bg-stone-700'
+                }`}
+              >
+                <span
+                  className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${
+                    settings.autoLockPick ? 'translate-x-5' : 'translate-x-1'
+                  }`}
+                />
+              </button>
+            </div>
+
             {/* Hover Trigger Button */}
             <button
               id="test-hover-action-btn"

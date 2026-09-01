@@ -56,6 +56,13 @@ export const SkinChangerTab: React.FC<SkinChangerTabProps> = ({
   );
   const [isInjecting, setIsInjecting] = useState(false);
   const [injectedNotification, setInjectedNotification] = useState<string | null>(null);
+  const [confirmedSkinModal, setConfirmedSkinModal] = useState<{
+    championName: string;
+    skinName: string;
+    skinId: number;
+    splashUrl: string;
+    chromaName?: string;
+  } | null>(null);
 
   // Live Champ Select Simulation / Hook Selection
   const [champSelectActiveChampKey, setChampSelectActiveChampKey] = useState<string>(
@@ -176,18 +183,20 @@ export const SkinChangerTab: React.FC<SkinChangerTabProps> = ({
       roseCurrentChromaId: chromaIdx
     });
 
+    const chromaName = chromaIdx !== null && chromaColors[chromaIdx] ? `Chroma ${chromaColors[chromaIdx].name}` : undefined;
+
     // Check if running inside Python Desktop app (PyWebView / Rose Engine backend)
-    const pywebview = (window as unknown as { pywebview?: { api?: { set_rose_skin?: (champId: number, skinId: number, chromaId: number | null) => Promise<boolean> } } }).pywebview;
+    const pywebview = (window as unknown as { pywebview?: { api?: { set_rose_skin?: (champId: number, skinId: number, chromaId: number | null, skinName?: string) => Promise<boolean> } } }).pywebview;
 
     if (pywebview && pywebview.api && typeof pywebview.api.set_rose_skin === 'function') {
       try {
         addLog('lcu', `[ROSE HOOK] Skin salva na memória & armada: ${champ.name} -> "${skinName}" (SkinID: ${fullSkinId}, Chroma: ${chromaIdx ?? 'Padrão'})`);
-        const ok = await pywebview.api.set_rose_skin(champ.id, fullSkinId, chromaIdx);
+        const ok = await pywebview.api.set_rose_skin(champ.id, fullSkinId, chromaIdx, skinName);
         if (ok) {
-          showSuccess(champ.name, skinName, fullSkinId);
+          showSuccess(champ.name, skinName, fullSkinId, skin.splashUrl, chromaName);
         } else {
           addLog('warning', `Skin "${skinName}" salva na memória. Monitor Rose aplicará na seleção de skins.`);
-          showSuccess(champ.name, skinName, fullSkinId);
+          showSuccess(champ.name, skinName, fullSkinId, skin.splashUrl, chromaName);
         }
       } catch (err) {
         addLog('error', `Erro na comunicação do Rose Engine: ${String(err)}`);
@@ -199,7 +208,7 @@ export const SkinChangerTab: React.FC<SkinChangerTabProps> = ({
       addLog('lcu', `[ROSE MEMÓRIA] Skin pré-salva com sucesso: ${champ.name} -> "${skinName}" (ID ${fullSkinId}). Será reaplicada na seleção de skins.`);
       setTimeout(() => {
         setIsInjecting(false);
-        showSuccess(champ.name, skinName, fullSkinId);
+        showSuccess(champ.name, skinName, fullSkinId, skin.splashUrl, chromaName);
       }, 400);
     }
   };
@@ -218,17 +227,24 @@ export const SkinChangerTab: React.FC<SkinChangerTabProps> = ({
     addLog('info', `Skin pré-salva de ${champKey} removida da memória do aplicativo.`);
   };
 
-  const showSuccess = (champName: string, skinName: string, skinId: number) => {
+  const showSuccess = (champName: string, skinName: string, skinId: number, splashUrl?: string, chromaName?: string) => {
     setInjectedNotification(`Skin "${skinName}" salva na memória e armada para ${champName}!`);
-    addLog('success', `⭐ [MEMÓRIA SALVA] Skin "${skinName}" (ID ${skinId}) salva para ${champName}. Pronta para a tela de seleção!`, 'ROSE_ARMED');
+    setConfirmedSkinModal({
+      championName: champName,
+      skinName: skinName,
+      skinId: skinId,
+      splashUrl: splashUrl || previewSkin.splashUrl || '',
+      chromaName: chromaName
+    });
+    addLog('success', `⭐ [CONFIRMAÇÃO] Skin "${skinName}" (ID ${skinId}) salva para ${champName}. Pronta para a tela de seleção!`, 'ROSE_ARMED');
     setTimeout(() => setInjectedNotification(null), 5000);
 
     try {
       confetti({
-        particleCount: 45,
-        spread: 55,
+        particleCount: 50,
+        spread: 60,
         origin: { y: 0.65 },
-        colors: ['#e11d48', '#fda4af', '#f43f5e', '#a855f7']
+        colors: ['#e11d48', '#fda4af', '#f43f5e', '#a855f7', '#10b981']
       });
     } catch {
       // ignore
@@ -368,8 +384,69 @@ export const SkinChangerTab: React.FC<SkinChangerTabProps> = ({
         </div>
       </div>
 
-      {/* Success Notification Alert */}
-      {injectedNotification && (
+      {/* Success Notification Alert & Confirmation Card */}
+      {confirmedSkinModal && (
+        <div className="p-4 rounded-xl bg-gradient-to-r from-[#0b0f19] via-rose-950/40 to-[#0b0f19] border-2 border-rose-500/80 text-white flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-[0_0_30px_rgba(225,29,72,0.3)] animate-scaleIn relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-rose-600/10 rounded-full blur-2xl pointer-events-none"></div>
+          
+          <div className="flex items-center gap-3.5 relative z-10">
+            {confirmedSkinModal.splashUrl ? (
+              <div className="w-14 h-14 rounded-lg overflow-hidden border-2 border-rose-500 shadow-md shrink-0 bg-black">
+                <img
+                  src={confirmedSkinModal.splashUrl}
+                  alt={confirmedSkinModal.skinName}
+                  className="w-full h-full object-cover"
+                  referrerPolicy="no-referrer"
+                />
+              </div>
+            ) : (
+              <div className="w-12 h-12 rounded-lg bg-rose-950 border border-rose-500 flex items-center justify-center shrink-0 text-2xl">
+                🌸
+              </div>
+            )}
+            
+            <div className="space-y-0.5">
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-bold text-rose-400 uppercase tracking-widest flex items-center gap-1">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                  Skin Armada no Betray Client
+                </span>
+                <span className="text-[9px] font-mono bg-emerald-950 text-emerald-300 px-1.5 py-0.2 rounded border border-emerald-600/40 font-bold">
+                  LCU PRONTA
+                </span>
+              </div>
+              <div className="text-sm sm:text-base font-bold text-white font-cinzel tracking-wide">
+                {confirmedSkinModal.skinName}
+              </div>
+              <div className="text-xs text-slate-300 font-rajdhani flex items-center gap-2">
+                <span className="text-rose-300 font-bold">{confirmedSkinModal.championName}</span>
+                <span>•</span>
+                <span className="font-mono text-slate-400 text-[11px]">Skin ID: {confirmedSkinModal.skinId}</span>
+                {confirmedSkinModal.chromaName && (
+                  <>
+                    <span>•</span>
+                    <span className="text-purple-300 font-mono text-[11px]">{confirmedSkinModal.chromaName}</span>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 w-full sm:w-auto justify-end relative z-10">
+            <span className="hidden md:inline-block text-[11px] text-slate-400 italic">
+              Injeção automática ativa no Champ Select
+            </span>
+            <button
+              onClick={() => setConfirmedSkinModal(null)}
+              className="px-3 py-1.5 rounded-lg bg-[#07090e] hover:bg-slate-800 text-slate-300 border border-rose-900/60 font-cinzel text-xs font-bold transition-all cursor-pointer"
+            >
+              OK, Entendido ✕
+            </button>
+          </div>
+        </div>
+      )}
+
+      {injectedNotification && !confirmedSkinModal && (
         <div className="p-3 rounded-lg bg-emerald-950/90 border border-emerald-500/50 text-emerald-200 text-xs flex items-center justify-between shadow-[0_0_15px_rgba(16,185,129,0.2)] animate-scaleIn">
           <div className="flex items-center gap-2">
             <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />

@@ -11,9 +11,12 @@ import {
   LogOut,
   Download,
   Sparkles,
-  Eye
+  Eye,
+  Shield,
+  X
 } from 'lucide-react';
 import { AppSettings, GameflowPhase } from '../types';
+import { APP_LOGO_SRC } from '../assets/logo';
 
 interface NavbarProps {
   activeTab: string;
@@ -65,20 +68,36 @@ export const Navbar: React.FC<NavbarProps> = ({
     { id: 'lcu-bridge', label: 'LCU Bridge', icon: Terminal }
   ];
 
+  const [showIconModal, setShowIconModal] = useState(false);
+
   return (
     <header className="sticky top-0 z-40 bg-[#07090e]/95 backdrop-blur-md border-b border-rose-950/60 shadow-[0_4px_25px_rgba(0,0,0,0.8)]">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 flex items-center justify-between h-16 gap-3">
-        {/* Brand / Logo Tile */}
+        {/* Brand / Logo Tile with Talon Dark Icon */}
         <div className="flex items-center gap-3">
-          <div className="flex items-center justify-center gap-2.5 px-3.5 py-1.5 rounded-lg bg-black border border-rose-950/80 shadow-[0_0_15px_rgba(0,0,0,0.8),inset_0_1px_0_rgba(255,255,255,0.06)]">
-            <div className="w-6 h-6 border border-rose-600/50 rounded flex items-center justify-center bg-[#130810] shadow-[0_0_8px_rgba(225,29,72,0.4)] shrink-0">
-              <div className="w-2.5 h-2.5 bg-rose-500 clip-path-polygon shadow-[0_0_6px_rgba(244,63,94,0.9)]" />
+          <button 
+            onClick={() => setShowIconModal(true)}
+            className="flex items-center justify-center gap-2.5 px-3 py-1.5 rounded-xl bg-black border border-rose-900/60 hover:border-rose-500 shadow-[0_0_15px_rgba(0,0,0,0.8),inset_0_1px_0_rgba(255,255,255,0.06)] group transition-all cursor-pointer text-left"
+            title="Clique para ver o ícone oficial do Betray Client (Talon Dark)"
+          >
+            <div className="w-8 h-8 rounded-lg overflow-hidden border border-rose-500/60 group-hover:border-rose-400 flex items-center justify-center bg-[#0d0710] shadow-[0_0_10px_rgba(225,29,72,0.4)] shrink-0 group-hover:scale-105 transition-transform">
+              <img 
+                src={APP_LOGO_SRC} 
+                alt="Betray Client Icon - Talon Dark" 
+                className="w-full h-full object-cover"
+                referrerPolicy="no-referrer"
+              />
             </div>
-            <h1 className="font-cinzel text-sm sm:text-base font-bold tracking-widest text-[#f8fafc] whitespace-nowrap flex items-center gap-1.5 leading-none">
-              <span>BETRAY</span>
-              <span className="text-rose-500">CLIENT</span>
-            </h1>
-          </div>
+            <div className="flex flex-col">
+              <h1 className="font-cinzel text-sm sm:text-base font-black tracking-widest text-[#f8fafc] whitespace-nowrap flex items-center gap-1.5 leading-none group-hover:text-white">
+                <span>BETRAY</span>
+                <span className="text-rose-500 group-hover:text-rose-400">CLIENT</span>
+              </h1>
+              <span className="text-[9px] font-mono text-slate-400 group-hover:text-rose-300 transition-colors uppercase tracking-widest">
+                Talon Dark Edition
+              </span>
+            </div>
+          </button>
         </div>
 
         {/* Center Nav Tabs */}
@@ -187,6 +206,82 @@ export const Navbar: React.FC<NavbarProps> = ({
           );
         })}
       </div>
+
+      {/* Talon Dark Icon Showcase Modal */}
+      {showIconModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-fadeIn">
+          <div className="relative w-full max-w-md bg-[#0b0e14] border border-rose-600/70 rounded-2xl shadow-[0_0_50px_rgba(225,29,72,0.35)] overflow-hidden p-6 space-y-5 animate-scaleIn">
+            <div className="flex items-center justify-between border-b border-rose-950/80 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-pulse" />
+                <h3 className="font-cinzel text-sm font-black text-white uppercase tracking-widest">
+                  Ícone Oficial • Betray Client
+                </h3>
+              </div>
+              <button 
+                onClick={() => setShowIconModal(false)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* High Res Icon Preview */}
+            <div className="flex flex-col items-center gap-4 py-2">
+              <div className="relative group">
+                <div className="absolute -inset-1 rounded-2xl bg-gradient-to-r from-rose-600 via-purple-600 to-rose-600 blur opacity-60 group-hover:opacity-100 transition duration-500"></div>
+                <div className="relative w-48 h-48 rounded-2xl overflow-hidden border-2 border-rose-500 shadow-2xl bg-black">
+                  <img 
+                    src={APP_LOGO_SRC} 
+                    alt="Betray Client Talon Dark Icon Full" 
+                    className="w-full h-full object-cover"
+                    referrerPolicy="no-referrer"
+                  />
+                </div>
+              </div>
+
+              <div className="text-center space-y-1">
+                <h4 className="font-cinzel text-lg font-black text-white tracking-wider">
+                  TALON DARK ASSASSIN
+                </h4>
+                <p className="text-xs text-rose-300/90 font-rajdhani">
+                  Identidade visual dark inspirada nas lâminas e capuz do Talon
+                </p>
+              </div>
+            </div>
+
+            {/* Visual Specs Badge */}
+            <div className="grid grid-cols-3 gap-2 text-center text-[10px] font-mono">
+              <div className="p-2 rounded-lg bg-black/60 border border-slate-800 text-slate-300">
+                <span className="text-rose-400 block font-bold">Estilo</span>
+                <span>Dark Fantasy</span>
+              </div>
+              <div className="p-2 rounded-lg bg-black/60 border border-slate-800 text-slate-300">
+                <span className="text-rose-400 block font-bold">Tema</span>
+                <span>Lâminas do Talon</span>
+              </div>
+              <div className="p-2 rounded-lg bg-black/60 border border-slate-800 text-slate-300">
+                <span className="text-rose-400 block font-bold">Formato</span>
+                <span>1:1 App Badge</span>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between pt-2">
+              <span className="text-[11px] text-slate-400 font-mono">
+                Criado para o Betray Companion
+              </span>
+              <a
+                href={APP_LOGO_SRC}
+                download="betray_talon_dark_icon.jpg"
+                className="px-3.5 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white font-cinzel text-xs font-bold flex items-center gap-1.5 shadow-[0_0_15px_rgba(225,29,72,0.4)] transition-all cursor-pointer"
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span>Salvar Ícone</span>
+              </a>
+            </div>
+          </div>
+        </div>
+      )}
     </header>
   );
 };

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Download, ShieldCheck, Cpu, Sparkles, CheckCircle2, Zap, Monitor, AlertTriangle, Terminal, Copy, Check, Info } from 'lucide-react';
 import { AppSettings, LcuLog } from '../types';
 import { downloadWindowsPackage } from '../utils/installer';
+import { APP_LOGO_SRC } from '../assets/logo';
 
 interface DownloadTabProps {
   settings: AppSettings;
@@ -37,32 +38,46 @@ export const DownloadTab: React.FC<DownloadTabProps> = ({ settings, addLog }) =>
         <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-rose-600/10 rounded-full blur-3xl pointer-events-none -mr-32 -mt-32" />
         
         <div className="relative z-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-8">
-          <div className="space-y-3 max-w-2xl">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-rose-950/90 border border-rose-700/80 text-rose-300 text-xs font-mono font-bold tracking-wider">
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
-              <span>VERSÃO WINDOWS STANDALONE • 64-BIT COMPATÍVEL</span>
+          <div className="flex flex-col sm:flex-row items-start gap-5 max-w-2xl">
+            <div className="relative group shrink-0">
+              <div className="absolute -inset-1 rounded-2xl bg-gradient-to-r from-rose-600 to-purple-600 blur opacity-75 group-hover:opacity-100 transition duration-300"></div>
+              <div className="relative w-20 h-20 sm:w-24 sm:h-24 rounded-2xl overflow-hidden border-2 border-rose-500 shadow-2xl bg-black flex items-center justify-center">
+                <img 
+                  src={APP_LOGO_SRC} 
+                  alt="Betray Client Talon Dark Icon" 
+                  className="w-full h-full object-cover"
+                  referrerPolicy="no-referrer"
+                />
+              </div>
             </div>
-            
-            <h1 className="font-cinzel text-3xl md:text-5xl font-black text-white tracking-wide">
-              BETRAY CLIENT <span className="text-rose-500">.EXE</span>
-            </h1>
-            
-            <p className="text-sm md:text-base text-slate-300 font-sans leading-relaxed">
-              Baixe o pacote oficial <strong className="text-white">BetrayClient_Windows.zip</strong>. Ele contém o compilador de 1 clique que gera o executável nativo <strong className="text-rose-400 font-mono">BetrayClient.exe</strong> no seu Windows sem erros de compatibilidade e sem dependências manuais.
-            </p>
 
-            <div className="flex flex-wrap items-center gap-3 pt-2 text-xs text-slate-400 font-mono">
-              <span className="flex items-center gap-1 text-emerald-400">
-                <CheckCircle2 className="w-3.5 h-3.5" /> Compilação Nativa PE 64-Bit
-              </span>
-              <span>•</span>
-              <span className="flex items-center gap-1 text-rose-400">
-                <ShieldCheck className="w-3.5 h-3.5" /> 100% Anti-Vanguard Safe
-              </span>
-              <span>•</span>
-              <span className="flex items-center gap-1 text-cyan-400">
-                <Zap className="w-3.5 h-3.5" /> Zero Atraso / LCU Direta
-              </span>
+            <div className="space-y-2.5">
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-rose-950/90 border border-rose-700/80 text-rose-300 text-xs font-mono font-bold tracking-wider">
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
+                <span>VERSÃO WINDOWS STANDALONE • 64-BIT COMPATÍVEL</span>
+              </div>
+              
+              <h1 className="font-cinzel text-3xl md:text-5xl font-black text-white tracking-wide">
+                BETRAY CLIENT <span className="text-rose-500">.EXE</span>
+              </h1>
+              
+              <p className="text-sm text-slate-300 font-sans leading-relaxed">
+                Baixe o pacote oficial <strong className="text-white">BetrayClient_Windows.zip</strong> com o novo ícone <strong className="text-rose-400 font-bold">Talon Dark Assassin</strong>. Ele contém o compilador de 1 clique que gera o executável nativo <strong className="text-rose-400 font-mono">BetrayClient.exe</strong> no seu Windows.
+              </p>
+
+              <div className="flex flex-wrap items-center gap-3 pt-1 text-xs text-slate-400 font-mono">
+                <span className="flex items-center gap-1 text-emerald-400">
+                  <CheckCircle2 className="w-3.5 h-3.5" /> Compilação Nativa PE 64-Bit
+                </span>
+                <span>•</span>
+                <span className="flex items-center gap-1 text-rose-400">
+                  <ShieldCheck className="w-3.5 h-3.5" /> 100% Anti-Vanguard Safe
+                </span>
+                <span>•</span>
+                <span className="flex items-center gap-1 text-cyan-400">
+                  <Zap className="w-3.5 h-3.5" /> Zero Atraso / LCU Direta
+                </span>
+              </div>
             </div>
           </div>
 

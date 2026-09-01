@@ -363,8 +363,49 @@ class BetrayBridgeAPI:
             "masteries": masteries_data
         }
 
-    def set_rose_skin(self, champ_id, skin_id, chroma_id=None):
-        return self.rose_changer.set_skin(champ_id, skin_id, chroma_id)
+    def set_rose_skin(self, champ_id, skin_id, chroma_id=None, skin_name=""):
+        res = self.rose_changer.set_skin(champ_id, skin_id, chroma_id, skin_name)
+        if res.get("success"):
+            chroma_text = f" (Chroma #{chroma_id})" if chroma_id is not None else ""
+            msg = f"🌸 [SKIN CHANGER] Skin '{skin_name or skin_id}' armada para o Campeão #{champ_id}{chroma_text}! Injeção LCU pronta."
+            self.add_log("success", msg)
+            self.save_settings(self.settings)
+        else:
+            self.add_log("error", f"Falha ao configurar skin: {res.get('message')}")
+        return res
+
+    def get_rose_skin(self, champ_id):
+        return self.rose_changer.get_configured_skin_for_champion(champ_id)
+
+    def get_all_rose_skins(self):
+        return self.rose_changer.get_all_skins()
+
+    def remove_rose_skin(self, champ_id):
+        res = self.rose_changer.remove_skin(champ_id)
+        self.add_log("info", f"Skin personalizada removida para Campeão #{champ_id}.")
+        self.save_settings(self.settings)
+        return res
+
+    def clear_all_rose_skins(self):
+        res = self.rose_changer.clear_all_skins()
+        self.add_log("info", "Todas as skins personalizadas foram limpas.")
+        self.save_settings(self.settings)
+        return res
+
+    def apply_rose_skin_now(self, champ_id, skin_id, chroma_id=None):
+        ok = self.rose_changer.apply_skin_to_lcu(champ_id, skin_id, chroma_id)
+        if ok:
+            self.add_log("success", f"Injeção forçada de Skin #{skin_id} enviada para LCU!")
+        return {"success": ok}
+
+    def fetch_champion_skins_lcu(self, champ_id):
+        return self.rose_changer.fetch_lcu_champion_skins(champ_id)
+
+    def toggle_rose_skin_changer(self, enabled=None):
+        res = self.rose_changer.toggle(enabled)
+        self.add_log("info", f"Skin Changer {'ativado' if res.get('enabled') else 'desativado'}.")
+        self.save_settings(self.settings)
+        return res
 
     def get_logs(self):
         return self.logs
@@ -438,6 +479,7 @@ def background_lcu_worker(api):
                         session_data = session.json()
                         api.auto_ban_handler.check_and_act(session_data)
                         api.auto_pick_handler.check_and_act(session_data)
+                        api.rose_changer.check_and_apply_champ_select(session_data)
 
                         if api.dodge_handler.is_armed:
                             timer = session_data.get("timer", {})
@@ -658,10 +700,13 @@ class AutoAcceptHandler:
             return res and res.status_code == 200
         return False
 `,
-    'src/core/auto_pick.py': `class AutoPickHandler:
+    'src/core/auto_pick.py': `import time
+
+class AutoPickHandler:
     def __init__(self, lcu_client, settings):
         self.lcu = lcu_client
         self.settings = settings
+        self.last_locked_action_id = None
 
     def get_assigned_role(self, session_data):
         local_cell_id = session_data.get("localPlayerCellId", 0)
@@ -675,54 +720,181 @@ class AutoAcceptHandler:
                 if assigned_pos == "UTILITY": return "SUPPORT"
         return "MID"
 
+    def get_pre_pick_champions(self, assigned_role):
+        pre_picks_map = (
+            self.settings.get("pre_pick_champions") or 
+            self.settings.get("prePickChampions") or 
+            {}
+        )
+        picks = []
+        if isinstance(pre_picks_map, dict):
+            picks = pre_picks_map.get(assigned_role, []) or pre_picks_map.get("MID", [])
+        elif isinstance(pre_picks_map, list):
+            picks = pre_picks_map
+
+        if isinstance(picks, (int, str)):
+            try:
+                picks = [int(picks)]
+            except:
+                picks = []
+        return [int(c) for c in picks if str(c).isdigit()]
+
+    def is_auto_lock_enabled(self):
+        return bool(
+            self.settings.get("auto_lock_pick", True) and 
+            self.settings.get("autoLockPick", True) and
+            self.settings.get("auto_pick_enabled", True) and
+            self.settings.get("autoPickEnabled", True)
+        )
+
     def check_and_act(self, session_data):
+        if not self.settings.get("auto_pick_enabled", True) and not self.settings.get("autoPickEnabled", True):
+            return
+
         local_cell_id = session_data.get("localPlayerCellId", 0)
         actions = session_data.get("actions", [])
         assigned_role = self.get_assigned_role(session_data)
+        pre_picks = self.get_pre_pick_champions(assigned_role)
         
-        pre_picks = self.settings.get("pre_pick_champions", {}).get(assigned_role, [])
         if not pre_picks:
             return
+
+        banned_and_picked = set()
+        bans = session_data.get("bans", {})
+        for b in bans.get("myTeamBans", []) + bans.get("theirTeamBans", []):
+            if isinstance(b, int) and b > 0:
+                banned_and_picked.add(b)
+
+        for team_key in ["myTeam", "theirTeam"]:
+            for member in session_data.get(team_key, []):
+                if member.get("cellId") != local_cell_id:
+                    c_id = member.get("championId", 0)
+                    if c_id > 0:
+                        banned_and_picked.add(c_id)
+
+        target_champ_id = pre_picks[0]
+        for c in pre_picks:
+            if c not in banned_and_picked:
+                target_champ_id = c
+                break
+
+        auto_lock = self.is_auto_lock_enabled()
 
         for action_group in actions:
             for action in action_group:
                 if action.get("actorCellId") == local_cell_id and action.get("type") == "pick":
-                    if action.get("isInProgress") and not action.get("completed"):
-                        action_id = action.get("id")
-                        for champ_id in pre_picks:
-                            patch_res = self.lcu.patch(f"/lol-champ-select/v1/session/actions/{action_id}", {
-                                "championId": champ_id,
-                                "type": "pick"
-                            })
-                            if patch_res and patch_res.status_code == 204:
-                                self.lcu.post(f"/lol-champ-select/v1/session/actions/{action_id}/complete")
-                                break
+                    action_id = action.get("id")
+                    is_in_progress = action.get("isInProgress", False)
+                    is_completed = action.get("completed", False)
+
+                    if is_completed or self.last_locked_action_id == action_id:
+                        continue
+
+                    if is_in_progress:
+                        payload = {
+                            "championId": int(target_champ_id),
+                            "completed": bool(auto_lock),
+                            "type": "pick"
+                        }
+                        
+                        self.lcu.patch(f"/lol-champ-select/v1/session/actions/{action_id}", payload)
+                        
+                        if auto_lock:
+                            time.sleep(0.08)
+                            complete_res = self.lcu.post(f"/lol-champ-select/v1/session/actions/{action_id}/complete")
+                            if not complete_res or complete_res.status_code not in [200, 204]:
+                                self.lcu.post(f"/lol-champ-select/v1/session/actions/{action_id}/complete", {})
+                                self.lcu.patch(f"/lol-champ-select/v1/session/actions/{action_id}", {
+                                    "championId": int(target_champ_id),
+                                    "completed": True
+                                })
+                            self.last_locked_action_id = action_id
+                        break
+
+                    elif not is_completed and action.get("championId") != target_champ_id:
+                        self.lcu.patch(f"/lol-champ-select/v1/session/actions/{action_id}", {
+                            "championId": int(target_champ_id),
+                            "completed": False,
+                            "type": "pick"
+                        })
+                        self.lcu.patch("/lol-champ-select/v1/session/my-selection", {
+                            "championPickIntent": int(target_champ_id)
+                        })
 `,
-    'src/core/auto_ban.py': `class AutoBanHandler:
+    'src/core/auto_ban.py': `import time
+
+class AutoBanHandler:
     def __init__(self, lcu_client, settings):
         self.lcu = lcu_client
         self.settings = settings
+        self.last_banned_action_id = None
+
+    def get_pre_ban_champions(self):
+        bans = (
+            self.settings.get("pre_ban_champions") or 
+            self.settings.get("preBanChampions") or 
+            []
+        )
+        if isinstance(bans, (int, str)):
+            try:
+                bans = [int(bans)]
+            except:
+                bans = []
+        return [int(c) for c in bans if str(c).isdigit()]
 
     def check_and_act(self, session_data):
+        if not self.settings.get("auto_ban_enabled", True) and not self.settings.get("autoBanEnabled", True):
+            return
+
         local_cell_id = session_data.get("localPlayerCellId", 0)
         actions = session_data.get("actions", [])
-        pre_bans = self.settings.get("pre_ban_champions", [])
+        pre_bans = self.get_pre_ban_champions()
+        
         if not pre_bans:
             return
+
+        already_banned = set()
+        bans = session_data.get("bans", {})
+        for b in bans.get("myTeamBans", []) + bans.get("theirTeamBans", []):
+            if isinstance(b, int) and b > 0:
+                already_banned.add(b)
+
+        target_ban_id = pre_bans[0]
+        for b_id in pre_bans:
+            if b_id not in already_banned:
+                target_ban_id = b_id
+                break
 
         for action_group in actions:
             for action in action_group:
                 if action.get("actorCellId") == local_cell_id and action.get("type") == "ban":
-                    if action.get("isInProgress") and not action.get("completed"):
-                        action_id = action.get("id")
-                        for champ_id in pre_bans:
-                            patch_res = self.lcu.patch(f"/lol-champ-select/v1/session/actions/{action_id}", {
-                                "championId": champ_id,
-                                "type": "ban"
+                    action_id = action.get("id")
+                    is_in_progress = action.get("isInProgress", False)
+                    is_completed = action.get("completed", False)
+
+                    if is_completed or self.last_banned_action_id == action_id:
+                        continue
+
+                    if is_in_progress:
+                        payload = {
+                            "championId": int(target_ban_id),
+                            "completed": True,
+                            "type": "ban"
+                        }
+                        
+                        self.lcu.patch(f"/lol-champ-select/v1/session/actions/{action_id}", payload)
+                        time.sleep(0.08)
+                        
+                        complete_res = self.lcu.post(f"/lol-champ-select/v1/session/actions/{action_id}/complete")
+                        if not complete_res or complete_res.status_code not in [200, 204]:
+                            self.lcu.post(f"/lol-champ-select/v1/session/actions/{action_id}/complete", {})
+                            self.lcu.patch(f"/lol-champ-select/v1/session/actions/{action_id}", {
+                                "championId": int(target_ban_id),
+                                "completed": True
                             })
-                            if patch_res and patch_res.status_code == 204:
-                                self.lcu.post(f"/lol-champ-select/v1/session/actions/{action_id}/complete")
-                                break
+                        
+                        self.last_banned_action_id = action_id
+                        break
 `,
     'src/core/background_changer.py': `class BackgroundChanger:
     def __init__(self, lcu_client):
@@ -735,23 +907,303 @@ class AutoAcceptHandler:
             res = self.lcu.put("/lol-summoner/v1/current-summoner/background-skin", payload)
         return res and res.status_code in [200, 204]
 `,
-    'src/core/rose_skin_changer.py': `class RoseSkinChanger:
+    'src/core/rose_skin_changer.py': `import os
+import json
+import time
+
+class RoseSkinChanger:
     def __init__(self, lcu_client, settings):
         self.lcu = lcu_client
         self.settings = settings
         self.active_skins = {}
+        self.last_applied_skin_per_champ = {}
 
-    def set_skin(self, champ_id, skin_id, chroma_id=None):
-        self.active_skins[int(champ_id)] = {
-            "skin_id": int(skin_id),
-            "chroma_id": chroma_id
+        saved_skins = (
+            self.settings.get("rose_selected_skins") or 
+            self.settings.get("roseSelectedSkins") or 
+            {}
+        )
+        for key, data in saved_skins.items():
+            if isinstance(data, dict) and data.get("skinId"):
+                try:
+                    c_id = int(data.get("skinId")) // 1000
+                    self.active_skins[c_id] = {
+                        "skin_id": int(data.get("skinId")),
+                        "chroma_id": data.get("chromaId"),
+                        "skin_name": data.get("skinName", ""),
+                        "skin_num": data.get("skinNum", 0)
+                    }
+                except:
+                    pass
+
+    def is_enabled(self):
+        return bool(
+            self.settings.get("rose_skin_changer_enabled", True) and 
+            self.settings.get("roseSkinChangerEnabled", True)
+        )
+
+    def toggle(self, enabled=None):
+        if enabled is None:
+            enabled = not self.is_enabled()
+        self.settings["rose_skin_changer_enabled"] = bool(enabled)
+        self.settings["roseSkinChangerEnabled"] = bool(enabled)
+        return {
+            "success": True,
+            "enabled": bool(enabled),
+            "message": f"Skin Changer {'ativado' if enabled else 'desativado'} com sucesso."
         }
+
+    def set_skin(self, champ_id, skin_id, chroma_id=None, skin_name=""):
+        try:
+            champ_id = int(champ_id)
+            skin_id = int(skin_id)
+            chroma_id = int(chroma_id) if (chroma_id is not None and str(chroma_id).isdigit()) else None
+            skin_num = skin_id % 1000
+        except Exception as e:
+            return {
+                "success": False,
+                "message": f"IDs inválidos: {str(e)}",
+                "champ_id": champ_id,
+                "skin_id": skin_id
+            }
+
+        skin_entry = {
+            "skin_id": skin_id,
+            "skin_num": skin_num,
+            "chroma_id": chroma_id,
+            "skin_name": skin_name or f"Skin #{skin_id}"
+        }
+
+        self.active_skins[champ_id] = skin_entry
+
+        if "rose_selected_skins" not in self.settings:
+            self.settings["rose_selected_skins"] = {}
+        if "roseSelectedSkins" not in self.settings:
+            self.settings["roseSelectedSkins"] = {}
+
+        save_dict = {
+            "skinId": skin_id,
+            "skinNum": skin_num,
+            "skinName": skin_name or f"Skin #{skin_id}",
+            "chromaId": chroma_id
+        }
+        self.settings["rose_selected_skins"][str(champ_id)] = save_dict
+        self.settings["roseSelectedSkins"][str(champ_id)] = save_dict
+        self.settings["rose_current_skin_id"] = skin_id
+        self.settings["rose_current_chroma_id"] = chroma_id
+        self.settings["rose_current_skin_name"] = skin_name
+
+        applied_now = self.apply_skin_to_lcu(champ_id, skin_id, chroma_id)
+
+        return {
+            "success": True,
+            "message": f"Skin '{skin_name}' armada com sucesso!",
+            "champ_id": champ_id,
+            "skin_id": skin_id,
+            "chroma_id": chroma_id,
+            "skin_name": skin_name,
+            "applied_immediately": applied_now
+        }
+
+    def get_configured_skin_for_champion(self, champ_id):
+        champ_id = int(champ_id)
+        if champ_id in self.active_skins:
+            return self.active_skins[champ_id]
+
+        saved_skins = (
+            self.settings.get("rose_selected_skins") or 
+            self.settings.get("roseSelectedSkins") or 
+            {}
+        )
+        if str(champ_id) in saved_skins:
+            data = saved_skins[str(champ_id)]
+            return {
+                "skin_id": data.get("skinId"),
+                "skin_num": data.get("skinNum", 0),
+                "chroma_id": data.get("chromaId"),
+                "skin_name": data.get("skinName", "")
+            }
+
+        curr_skin_id = self.settings.get("rose_current_skin_id") or self.settings.get("roseCurrentSkinId")
+        if curr_skin_id and (int(curr_skin_id) // 1000) == champ_id:
+            return {
+                "skin_id": int(curr_skin_id),
+                "skin_num": int(curr_skin_id) % 1000,
+                "chroma_id": self.settings.get("rose_current_chroma_id") or self.settings.get("roseCurrentChromaId"),
+                "skin_name": self.settings.get("rose_current_skin_name", "")
+            }
+
+        return None
+
+    def get_all_skins(self):
+        return {
+            "success": True,
+            "skins": self.active_skins,
+            "count": len(self.active_skins)
+        }
+
+    def remove_skin(self, champ_id):
+        champ_id = int(champ_id)
+        if champ_id in self.active_skins:
+            del self.active_skins[champ_id]
+
+        if "rose_selected_skins" in self.settings and str(champ_id) in self.settings["rose_selected_skins"]:
+            del self.settings["rose_selected_skins"][str(champ_id)]
+        if "roseSelectedSkins" in self.settings and str(champ_id) in self.settings["roseSelectedSkins"]:
+            del self.settings["roseSelectedSkins"][str(champ_id)]
+
+        default_skin_id = champ_id * 1000
+        self.apply_skin_to_lcu(champ_id, default_skin_id, None)
+
+        return {
+            "success": True,
+            "message": f"Skin padrão restaurada para campeão #{champ_id}.",
+            "champ_id": champ_id
+        }
+
+    def clear_all_skins(self):
+        self.active_skins.clear()
+        self.settings["rose_selected_skins"] = {}
+        self.settings["roseSelectedSkins"] = {}
+        self.settings["rose_current_skin_id"] = None
+        self.settings["rose_current_chroma_id"] = None
+        return {
+            "success": True,
+            "message": "Todas as skins foram redefinidas."
+        }
+
+    def apply_skin_to_lcu(self, champ_id, skin_id, chroma_id=None):
+        target_skin_id = int(chroma_id) if chroma_id else int(skin_id)
+        champ_id = int(champ_id)
+        success = False
+
+        # Vetor 1: Seleção em tempo real de Champ Select (Skin Carousel)
+        try:
+            res1 = self.lcu.patch("/lol-champ-select/v1/session/my-selection", {
+                "selectedSkinId": target_skin_id
+            })
+            if res1 and res1.status_code in [200, 204]:
+                success = True
+        except:
+            pass
+
+        # Vetor 2: Current Champion Selection
+        try:
+            res2 = self.lcu.patch("/lol-champ-select/v1/current-champion", {
+                "championId": champ_id,
+                "selectedSkinId": target_skin_id
+            })
+            if res2 and res2.status_code in [200, 204]:
+                success = True
+        except:
+            pass
+
+        # Vetor 3: Skin Carousel Direto
+        try:
+            self.lcu.post(f"/lol-champ-select/v1/skin-carousel/skins/{target_skin_id}/select", {})
+            if chroma_id:
+                self.lcu.post(f"/lol-champ-select/v1/skin-carousel/skins/{skin_id}/chromas/{chroma_id}/select", {})
+        except:
+            pass
+
+        # Vetor 4: Skin Selector endpoint
+        try:
+            self.lcu.patch("/lol-champ-select/v1/skin-selector", {
+                "selectedSkinId": target_skin_id
+            })
+        except:
+            pass
+
+        # Vetor 5: Loadouts V4 (persiste cosméticos do inventário do cliente)
+        try:
+            loadout_res = self.lcu.get("/lol-loadouts/v4/loadouts/scope/inventory")
+            if loadout_res and loadout_res.status_code == 200:
+                loadouts = loadout_res.json()
+                if isinstance(loadouts, list) and len(loadouts) > 0:
+                    loadout_id = loadouts[0].get("id")
+                    if loadout_id:
+                        payload = {
+                            "loadout": {
+                                "CHAMPION_SKIN": {
+                                    "itemId": target_skin_id,
+                                    "inventoryType": "CHAMPION_SKIN"
+                                }
+                            }
+                        }
+                        self.lcu.put(f"/lol-loadouts/v4/loadouts/{loadout_id}", payload)
+                        self.lcu.patch(f"/lol-loadouts/v4/loadouts/{loadout_id}", payload)
+                        success = True
+        except:
+            pass
+
+        # Vetor 6: Cosmetics Selection
+        try:
+            self.lcu.patch("/lol-cosmetics/v1/selection/skin", {
+                "skinId": target_skin_id
+            })
+        except:
+            pass
+
+        self.last_applied_skin_per_champ[champ_id] = target_skin_id
+        return success
+
+    def check_and_apply_champ_select(self, session_data):
+        if not self.is_enabled():
+            return False
+
+        local_cell_id = session_data.get("localPlayerCellId", 0)
+        my_team = session_data.get("myTeam", [])
+        
+        my_player = next((m for m in my_team if m.get("cellId") == local_cell_id), None)
+        if not my_player:
+            return False
+
+        champ_id = my_player.get("championId") or my_player.get("championPickIntent")
+        if not champ_id or champ_id <= 0:
+            return False
+
+        champ_id = int(champ_id)
+        configured_skin = self.get_configured_skin_for_champion(champ_id)
+        if not configured_skin:
+            return False
+
+        skin_id = configured_skin.get("skin_id")
+        chroma_id = configured_skin.get("chroma_id")
+        target_skin_id = int(chroma_id) if chroma_id else int(skin_id)
+
+        timer = session_data.get("timer", {})
+        phase = timer.get("phase", "")
+        current_selected = my_player.get("selectedSkinId", 0)
+
+        is_finalization = (phase == "FINALIZATION")
+        needs_apply = (current_selected != target_skin_id) or (self.last_applied_skin_per_champ.get(champ_id) != target_skin_id)
+
+        if needs_apply or (is_finalization and self.last_applied_skin_per_champ.get(f"{champ_id}_fin") != target_skin_id):
+            applied = self.apply_skin_to_lcu(champ_id, skin_id, chroma_id)
+            if is_finalization:
+                self.last_applied_skin_per_champ[f"{champ_id}_fin"] = target_skin_id
+            return applied
+
         return True
 
+    def fetch_lcu_champion_skins(self, champ_id):
+        champ_id = int(champ_id)
+        res = self.lcu.get(f"/lol-game-data/assets/v1/champions/{champ_id}.json")
+        if res and res.status_code == 200:
+            data = res.json()
+            return {
+                "success": True,
+                "skins": data.get("skins", []),
+                "name": data.get("name", "")
+            }
+        return {"success": False, "skins": []}
+
     def check_and_apply_in_game(self):
-        if not self.settings.get("rose_skin_changer_enabled", True):
+        if not self.is_enabled():
             return
-        pass
+        
+        for champ_id, skin_data in self.active_skins.items():
+            self.apply_skin_to_lcu(champ_id, skin_data.get("skin_id"), skin_data.get("chroma_id"))
 `,
     'src/core/lobby_reveal.py': `import os
 import re

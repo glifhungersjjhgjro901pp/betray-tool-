@@ -148,8 +148,49 @@ class BetrayBridgeAPI:
             "masteries": masteries_data
         }
 
-    def set_rose_skin(self, champ_id, skin_id, chroma_id=None):
-        return self.rose_changer.set_skin(champ_id, skin_id, chroma_id)
+    def set_rose_skin(self, champ_id, skin_id, chroma_id=None, skin_name=""):
+        res = self.rose_changer.set_skin(champ_id, skin_id, chroma_id, skin_name)
+        if res.get("success"):
+            chroma_text = f" (Chroma #{chroma_id})" if chroma_id is not None else ""
+            msg = f"🌸 [SKIN CHANGER] Skin '{skin_name or skin_id}' armada para o Campeão #{champ_id}{chroma_text}! Injeção LCU pronta."
+            self.add_log("success", msg)
+            self.save_settings(self.settings)
+        else:
+            self.add_log("error", f"Falha ao configurar skin: {res.get('message')}")
+        return res
+
+    def get_rose_skin(self, champ_id):
+        return self.rose_changer.get_configured_skin_for_champion(champ_id)
+
+    def get_all_rose_skins(self):
+        return self.rose_changer.get_all_skins()
+
+    def remove_rose_skin(self, champ_id):
+        res = self.rose_changer.remove_skin(champ_id)
+        self.add_log("info", f"Skin personalizada removida para Campeão #{champ_id}.")
+        self.save_settings(self.settings)
+        return res
+
+    def clear_all_rose_skins(self):
+        res = self.rose_changer.clear_all_skins()
+        self.add_log("info", "Todas as skins personalizadas foram limpas.")
+        self.save_settings(self.settings)
+        return res
+
+    def apply_rose_skin_now(self, champ_id, skin_id, chroma_id=None):
+        ok = self.rose_changer.apply_skin_to_lcu(champ_id, skin_id, chroma_id)
+        if ok:
+            self.add_log("success", f"Injeção forçada de Skin #{skin_id} enviada para LCU!")
+        return {"success": ok}
+
+    def fetch_champion_skins_lcu(self, champ_id):
+        return self.rose_changer.fetch_lcu_champion_skins(champ_id)
+
+    def toggle_rose_skin_changer(self, enabled=None):
+        res = self.rose_changer.toggle(enabled)
+        self.add_log("info", f"Skin Changer {'ativado' if res.get('enabled') else 'desativado'}.")
+        self.save_settings(self.settings)
+        return res
 
     def get_logs(self):
         return self.logs
@@ -223,6 +264,7 @@ def background_lcu_worker(api):
                         session_data = session.json()
                         api.auto_ban_handler.check_and_act(session_data)
                         api.auto_pick_handler.check_and_act(session_data)
+                        api.rose_changer.check_and_apply_champ_select(session_data)
 
                         if api.dodge_handler.is_armed:
                             timer = session_data.get("timer", {})
